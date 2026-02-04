@@ -37,6 +37,7 @@ if not LibBucketedHashSet then return end -- no upgrade needed
 -- Local lua references
 local tostring = tostring
 local bxor = bit.bxor
+local rshift = bit.rshift
 local strbyte = string.byte
 local assert = assert
 local type = type
@@ -110,7 +111,7 @@ end
 --- @return integer bucketIndex The index of the bucket where the hash was toggled.
 function LibBucketedHashSet:Toggle(value)
     local hash = FNV1a32(value, self.seed)
-    local bucketIndex = (hash % self.numBuckets) + 1
+    local bucketIndex = (rshift(hash, 16) % self.numBuckets) + 1
     self.buckets[bucketIndex] = bxor(self.buckets[bucketIndex], hash) % UINT32_MODULO
     return bucketIndex
 end
@@ -386,14 +387,54 @@ local function RunLibBucketedHashSetTests()
         end
         for i = 1, set.numBuckets do
             local bucketValue = set.buckets[i]
-            assert(type(bucketValue) == "number" and bucketValue >= 0 and bucketValue <= UINT32_MAX,
-                "Test 14 Failed: Bucket value should be a valid 32-bit unsigned integer")
+            assert(type(bucketValue) == "number" and bucketValue >= 0 and bucketValue <= UINT32_MAX, "Test 14 Failed: Bucket value should be a valid 32-bit unsigned integer")
         end
         print("Test 14 PASSED: Bucket hash values are within 32-bit range")
     end
 
+    -- Test 15: Distribution of values across buckets
     do
-        -- Test 15: Performance
+        local keysPerBucket = 32
+        local numValues = 10000
+        local numBuckets = ceil(numValues / keysPerBucket)
+        local set = LibBucketedHashSet.New(numBuckets)
+        local seenBuckets = {}
+
+        for i = 1, numBuckets do
+            seenBuckets[i] = 0
+        end
+
+        for i = 1, numValues do
+            local bucketIndex = set:Toggle("user-" .. i .. 0)
+            seenBuckets[bucketIndex] = seenBuckets[bucketIndex] + 1
+        end
+
+        -- Compute min/max
+        local minCount = math.huge
+        local maxCount = 0
+
+        for i = 1, numBuckets do
+            local c = seenBuckets[i]
+            if c < minCount then minCount = c end
+            if c > maxCount then maxCount = c end
+        end
+
+        -- Expected mean and sigma for binomial distribution
+        local expected = numValues / numBuckets
+        local sigma = math.sqrt(expected * (1 - 1/numBuckets))
+
+        -- 3-sigma bounds: using 3.5 sigma avoids rare false positives; 3 sigma was too tight for binomial variance.
+        local lowerBound = expected - 3.5 * sigma
+        local upperBound = expected + 3.5 * sigma
+
+        assert(minCount >= lowerBound, format("Test 15 Failed: Bucket distribution too skewed: min=%d < %d", minCount, lowerBound))
+        assert(maxCount <= upperBound, format("Test 15 Failed: Bucket distribution too skewed: max=%d > %d", maxCount, upperBound))
+        --print(format("distribution: %s", table.concat(seenBuckets, ", ")))
+        print("Test 15 PASSED: Distribution of values across buckets is acceptable")
+    end
+
+    do
+        -- Test 16: Performance
         local numOperations = 10000
         local set = LibBucketedHashSet.New(ceil(numOperations / 32))
         local results = {}
@@ -427,7 +468,7 @@ local function RunLibBucketedHashSetTests()
                 return format("%.2fs", milliseconds / 1000.0)
             end
         end
-        print(format("Test 15: Performance over %d operations: median=%s, avg=%s, min=%s, max=%s, total=%s", numOperations, FormatTime(medianTime), FormatTime(avgTime), FormatTime(minTime), FormatTime(maxTime), FormatTime(totalTime)))
+        print(format("Test 16: Performance over %d operations: median=%s, avg=%s, min=%s, max=%s, total=%s", numOperations, FormatTime(medianTime), FormatTime(avgTime), FormatTime(minTime), FormatTime(maxTime), FormatTime(totalTime)))
     end
 
     print("=== All LibBucketedHashSet Tests PASSED ===\n")
