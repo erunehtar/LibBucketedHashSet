@@ -28,7 +28,7 @@
 -- It is essentially a partitioned anti‑entropy structure. Each bucket holds a combined
 -- hash of all inserted values, allowing for efficient divergence detection.
 
-local MAJOR, MINOR = "LibBucketedHashSet", 1
+local MAJOR, MINOR = "LibBucketedHashSet", 2
 assert(LibStub, MAJOR .. " requires LibStub")
 
 local LibBucketedHashSet = LibStub:NewLibrary(MAJOR, MINOR)
