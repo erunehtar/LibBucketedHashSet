@@ -31,8 +31,14 @@
 local MAJOR, MINOR = "LibBucketedHashSet", 3
 assert(LibStub, MAJOR .. " requires LibStub")
 
+--- @class LibBucketedHashSet A bucketed hash set implementation for efficient divergence detection.
+--- @field seed integer The seed used for hashing, which can be set to create different hash sets with the same values.
+--- @field numBuckets integer The number of buckets in the hash set, which determines the granularity of divergence detection.
+--- @field buckets integer[] An array of integers representing the combined hash values for each bucket.
 local LibBucketedHashSet = LibStub:NewLibrary(MAJOR, MINOR)
 if not LibBucketedHashSet then return end -- no upgrade needed
+
+LibBucketedHashSet.__index = LibBucketedHashSet
 
 -- Local lua references
 local tostring = tostring
@@ -64,24 +70,6 @@ local function FNV1a32(value, seed)
     end
     return hash
 end
-
---- @class LibBucketedHashSet
---- @field New fun(numBuckets: integer, seed: integer?): LibBucketedHashSet
---- @field Update fun(self: LibBucketedHashSet, value: any, ...: any): integer
---- @field Clear fun(self: LibBucketedHashSet)
---- @field Export fun(self: LibBucketedHashSet): LibBucketedHashSet.State
---- @field Import fun(state: LibBucketedHashSet.State): LibBucketedHashSet
---- @field __eq fun(a: LibBucketedHashSet, b: LibBucketedHashSet): boolean
---- @field seed integer
---- @field numBuckets integer
---- @field buckets integer[]
-
---- @class LibBucketedHashSet.State
---- @field [1] integer
---- @field [2] integer
---- @field [3] integer[]
-
-LibBucketedHashSet.__index = LibBucketedHashSet
 
 --- Creates a new bucket hash set instance.
 --- @param numBuckets integer Number of buckets to use.
@@ -133,6 +121,11 @@ function LibBucketedHashSet:Clear()
         self.buckets[i] = 0
     end
 end
+
+--- @class LibBucketedHashSet.State The exported state of a bucket hash set, which can be used for serialization or transmission.
+--- @field [1] integer The seed used for hashing.
+--- @field [2] integer The number of buckets in the hash set.
+--- @field [3] integer[] An array of integers representing the combined hash values for each bucket.
 
 --- Exports the current state of the bucket hash set.
 --- @return LibBucketedHashSet.State state The exported state.
@@ -354,9 +347,9 @@ local function RunLibBucketedHashSetTests()
         assert(not pcall(function() LibBucketedHashSet.Import(123) end), "Test 14 Failed: Importing non-table state should raise error")
         assert(not pcall(function() LibBucketedHashSet.Import("invalid") end), "Test 14 Failed: Importing non-table state should raise error")
         assert(not pcall(function() LibBucketedHashSet.Import({}) end), "Test 14 Failed: Importing incomplete state should raise error")
-        assert(not pcall(function() LibBucketedHashSet.Import({123, 4}) end), "Test 14 Failed: Importing state with missing buckets should raise error")
-        assert(not pcall(function() LibBucketedHashSet.Import({123, -1, {}}) end), "Test 14 Failed: Importing state with invalid numBuckets should raise error")
-        assert(not pcall(function() LibBucketedHashSet.Import({123, 4, {0, 1}}) end), "Test 14 Failed: Importing state with incorrect buckets length should raise error")
+        assert(not pcall(function() LibBucketedHashSet.Import({ 123, 4 }) end), "Test 14 Failed: Importing state with missing buckets should raise error")
+        assert(not pcall(function() LibBucketedHashSet.Import({ 123, -1, {} }) end), "Test 14 Failed: Importing state with invalid numBuckets should raise error")
+        assert(not pcall(function() LibBucketedHashSet.Import({ 123, 4, { 0, 1 } }) end), "Test 14 Failed: Importing state with incorrect buckets length should raise error")
         --- @diagnostic enable: param-type-mismatch, missing-fields
         print("Test 14 PASSED: Invalid state raises error on import")
     end
@@ -456,7 +449,7 @@ local function RunLibBucketedHashSetTests()
 
         -- Expected mean and sigma for binomial distribution
         local expected = numValues / numBuckets
-        local sigma = math.sqrt(expected * (1 - 1/numBuckets))
+        local sigma = math.sqrt(expected * (1 - 1 / numBuckets))
 
         -- 3-sigma bounds: using 3.5 sigma avoids rare false positives; 3 sigma was too tight for binomial variance.
         local lowerBound = expected - 3.5 * sigma
